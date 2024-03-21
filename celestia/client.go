@@ -1,6 +1,7 @@
 package celestia
 
 import (
+	"DA-server/zklinknova"
 	"context"
 	"encoding/hex"
 	"github.com/celestiaorg/celestia-node/api/rpc/client"
@@ -88,14 +89,13 @@ func (client *Client) GetProof(
 	return client.Internal.Blob.GetProof(context.Background(), height, namespace, commitment)
 }
 
-type Input []byte
-type Output struct {
+type DAProof struct {
 	Commitment blob.Commitment
 	Proof      blob.Proof
 }
 
-func (client *Client) Subscribe(ctx context.Context, in <-chan *Input) (chan<- *Output, error) {
-	out := make(chan *Output)
+func (client *Client) Subscribe(ctx context.Context, in <-chan *zklinknova.Batch) (chan<- *DAProof, error) {
+	out := make(chan *DAProof)
 	go func() error {
 		defer close(out)
 		for {
@@ -111,7 +111,7 @@ func (client *Client) Subscribe(ctx context.Context, in <-chan *Input) (chan<- *
 					// TODO: re-transmit mechanism
 					return err
 				}
-				out <- &Output{
+				out <- &DAProof{
 					Commitment: *commitment,
 					Proof:      *proof,
 				}
