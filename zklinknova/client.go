@@ -7,7 +7,7 @@ import (
 )
 
 type Config struct {
-	NodeRPCHost string
+	NodeRPCEndpoint string
 }
 
 type Client struct {
@@ -19,7 +19,7 @@ func NewClient(ctx context.Context, cfg Config) (*Client, error) {
 
 func NewClientFromEnv(ctx context.Context) (*Client, error) {
 	cfg := Config{
-		NodeRPCHost: os.Getenv("ZKLINK_NOVA_RPC_HOST"),
+		NodeRPCEndpoint: os.Getenv("ZKLINK_NOVA_RPC_ENDPOINT"),
 	}
 	return NewClient(ctx, cfg)
 }
@@ -28,14 +28,14 @@ func (client *Client) fetchBatchData() (Batch, error) {
 	// TODO: implement
 	batch := Batch{
 		Number: 0,
-		data:   nil,
+		Data:   nil,
 	}
 	return batch, nil
 }
 
 type Batch struct {
 	Number uint64
-	data []byte
+	Data []byte
 }
 
 func (client *Client) Subscribe(ctx context.Context, interval time.Duration) (chan<- *Batch, error) {

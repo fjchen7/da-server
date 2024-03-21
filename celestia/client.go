@@ -13,7 +13,7 @@ import (
 )
 
 type Config struct {
-	NodeRPCHost string
+	NodeRPCEndpoint string
 	JWTToken    string
 	Namespace   share.Namespace
 	GasPrice    blob.GasPrice
@@ -28,7 +28,7 @@ type Client struct {
 // NewClient creates a new Client with one connection per Namespace with the
 // given token as the authorization token.
 func NewClient(ctx context.Context, cfg Config) (*Client, error) {
-	internal, err := client.NewClient(ctx, cfg.NodeRPCHost, cfg.JWTToken)
+	internal, err := client.NewClient(ctx, cfg.NodeRPCEndpoint, cfg.JWTToken)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func NewClientFromEnv(ctx context.Context) (*Client, error) {
 		return nil, err
 	}
 	cfg := Config{
-		NodeRPCHost: os.Getenv("CELESTIA_NODE_RPC_HOST"),
+		NodeRPCEndpoint: os.Getenv("CELESTIA_NODE_RPC_ENDPOINT"),
 		JWTToken:    os.Getenv("CELESTIA_NODE_JWT_TOKEN"),
 		Namespace:   namespace,
 		GasPrice:    blob.GasPrice(gasPrice),
@@ -94,14 +94,14 @@ type DAProof struct {
 	Proof      blob.Proof
 }
 
-func (client *Client) Subscribe(ctx context.Context, in <-chan *zklinknova.Batch) (chan<- *DAProof, error) {
+func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan<- *DAProof, error) {
 	out := make(chan *DAProof)
 	go func() error {
 		defer close(out)
 		for {
 			select {
-			case t := <-in:
-				height, commitment, err := client.SubmitBlob(*t)
+			case batch := <-batches:
+				height, commitment, err := client.SubmitBlob(batch.Data)
 				if err != nil {
 					// TODO: re-transmit mechanism
 					return err
