@@ -38,8 +38,9 @@ type Batch struct {
 	Data []byte
 }
 
-func (client *Client) Subscribe(ctx context.Context, interval time.Duration) (chan<- *Batch, error) {
+func (client *Client) Poll(ctx context.Context, intervalInMillisecond int64) (chan *Batch, error) {
 	out := make(chan *Batch)
+	interval := time.Duration(intervalInMillisecond * 1000)
 	go func() error {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()

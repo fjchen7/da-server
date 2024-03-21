@@ -94,7 +94,7 @@ type DAProof struct {
 	Proof      blob.Proof
 }
 
-func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan<- *DAProof, error) {
+func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan *DAProof, error) {
 	out := make(chan *DAProof)
 	go func() error {
 		defer close(out)
@@ -111,6 +111,7 @@ func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.
 					// TODO: re-transmit mechanism
 					return err
 				}
+				// TODO: store data into DB
 				out <- &DAProof{
 					Commitment: *commitment,
 					Proof:      *proof,
