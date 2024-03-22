@@ -6,6 +6,8 @@ import (
 	"DA-server/zklinknova"
 	"context"
 	"fmt"
+	"github.com/joho/godotenv"
+	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -13,17 +15,22 @@ import (
 )
 
 func main() {
-	celestisClient, err := celestia.NewClientFromEnv(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	loadEnv()
+
+	celestisClient, err := celestia.NewClientFromEnv(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "An error occurred when creating celestia client: %v\n", err)
 		os.Exit(1)
 	}
-	zklinkClient, err := zklinknova.NewClientFromEnv(context.Background())
+	zklinkClient, err := zklinknova.NewClientFromEnv(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "An error occurred when creating zklink nova client: %v\n", err)
 		os.Exit(1)
 	}
-	ethClient, err := eth.NewClientFromEnv(context.Background())
+	ethClient, err := eth.NewClientFromEnv(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "An error occurred when creating ethereum client: %v\n", err)
 		os.Exit(1)
@@ -35,18 +42,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	batches, err := zklinkClient.Poll(context.Background(), intervalInMillisecond)
+	batches, err := zklinkClient.Poll(ctx, intervalInMillisecond)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "An error occurred when zklink client polls batches: %v\n", err)
 		os.Exit(1)
 	}
-	daProofs, err := celestisClient.Subscribe(context.Background(), batches)
+	daProofs, err := celestisClient.Subscribe(ctx, batches)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "An error occurred when celestia client subscribe batches: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = ethClient.Subscribe(context.Background(), daProofs)
+	err = ethClient.Subscribe(ctx, daProofs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "An error occurred when ethereum client subscribe DA Proofs: %v\n", err)
 		os.Exit(1)
@@ -58,5 +65,12 @@ func main() {
 	select {
 	case <-signalChan:
 		os.Exit(0)
+	}
+}
+
+func loadEnv() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
 	}
 }

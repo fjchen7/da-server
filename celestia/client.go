@@ -17,12 +17,14 @@ type Config struct {
 	JWTToken    string
 	Namespace   share.Namespace
 	GasPrice    blob.GasPrice
+	DBConfig DBConfig
 }
 
 type Client struct {
 	Internal  client.Client
 	Namespace share.Namespace
 	GasPrice  blob.GasPrice
+	DBConfig DBConfig
 }
 
 // NewClient creates a new Client with one connection per Namespace with the
@@ -35,7 +37,9 @@ func NewClient(ctx context.Context, cfg Config) (*Client, error) {
 	return &Client{
 			Internal:  *internal,
 			Namespace: cfg.Namespace,
-			GasPrice:  cfg.GasPrice},
+			GasPrice:  cfg.GasPrice,
+			DBConfig:  cfg.DBConfig,
+		},
 		nil
 }
 
@@ -54,11 +58,26 @@ func NewClientFromEnv(ctx context.Context) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	portStr := os.Getenv("POSTGRESQL_PORT")
+	port, err := strconv.ParseUint(portStr, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+	dbConfig := DBConfig{
+		host:     os.Getenv("POSTGRESQL_HOST"),
+		port:     port,
+		user:     os.Getenv("POSTGRESQL_USER"),
+		password: os.Getenv("POSTGRESQL_PASSWORD"),
+		dbname:   os.Getenv("POSTGRESQL_DBNAME"),
+	}
+
 	cfg := Config{
 		NodeRPCEndpoint: os.Getenv("CELESTIA_NODE_RPC_ENDPOINT"),
-		JWTToken:    os.Getenv("CELESTIA_NODE_JWT_TOKEN"),
-		Namespace:   namespace,
-		GasPrice:    blob.GasPrice(gasPrice),
+		JWTToken:        os.Getenv("CELESTIA_NODE_JWT_TOKEN"),
+		Namespace:       namespace,
+		GasPrice:        blob.GasPrice(gasPrice),
+		DBConfig:        dbConfig,
 	}
 	return NewClient(ctx, cfg)
 }
@@ -90,14 +109,20 @@ func (client *Client) GetProof(
 }
 
 type DAProof struct {
+	Height uint64
 	Commitment blob.Commitment
 	Proof      blob.Proof
 }
 
 func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan *DAProof, error) {
 	out := make(chan *DAProof)
+	dbConnector, err := NewConnector(client.DBConfig)
+	if err != nil {
+		return nil, err
+	}
 	go func() error {
 		defer close(out)
+		defer dbConnector.Close()
 		for {
 			select {
 			case batch := <-batches:
@@ -111,11 +136,16 @@ func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.
 					// TODO: re-transmit mechanism
 					return err
 				}
-				// TODO: store data into DB
-				out <- &DAProof{
+				daProof := DAProof{
+					Height: height,
 					Commitment: *commitment,
 					Proof:      *proof,
 				}
+				err = dbConnector.StoreDAProof(daProof)
+				if err != nil {
+					return err
+				}
+				out <- &daProof
 			case <-ctx.Done():
 				return nil
 			}
