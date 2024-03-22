@@ -7,6 +7,7 @@ import (
 	"github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/blob"
 	"github.com/celestiaorg/celestia-node/share"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -14,17 +15,17 @@ import (
 
 type Config struct {
 	NodeRPCEndpoint string
-	JWTToken    string
-	Namespace   share.Namespace
-	GasPrice    blob.GasPrice
-	DBConfig DBConfig
+	JWTToken        string
+	Namespace       share.Namespace
+	GasPrice        blob.GasPrice
+	DBConfig        DBConfig
 }
 
 type Client struct {
 	Internal  client.Client
 	Namespace share.Namespace
 	GasPrice  blob.GasPrice
-	DBConfig DBConfig
+	DBConfig  DBConfig
 }
 
 // NewClient creates a new Client with one connection per Namespace with the
@@ -102,14 +103,13 @@ func (client *Client) SubmitBlob(payLoad []byte) (uint64, *blob.Commitment, erro
 
 func (client *Client) GetProof(
 	height uint64,
-	commitment blob.Commitment,
-) (*blob.Proof, error) {
+	commitment blob.Commitment) (*blob.Proof, error) {
 	namespace := client.Namespace
 	return client.Internal.Blob.GetProof(context.Background(), height, namespace, commitment)
 }
 
 type DAProof struct {
-	Height uint64
+	Height     uint64
 	Commitment blob.Commitment
 	Proof      blob.Proof
 }
@@ -131,13 +131,15 @@ func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.
 					// TODO: re-transmit mechanism
 					return err
 				}
+				log.Printf("Submit batch at %d with commitment %s to Celestia", height, hex.EncodeToString(*commitment))
 				proof, err := client.GetProof(height, *commitment)
 				if err != nil {
 					// TODO: re-transmit mechanism
 					return err
 				}
+				log.Printf("Fetch DA Proof at %d from Celestia", height)
 				daProof := DAProof{
-					Height: height,
+					Height:     height,
 					Commitment: *commitment,
 					Proof:      *proof,
 				}
@@ -145,6 +147,7 @@ func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.
 				if err != nil {
 					return err
 				}
+				log.Printf("Store DA Proof at %d to database", daProof.Height)
 				out <- &daProof
 			case <-ctx.Done():
 				return nil

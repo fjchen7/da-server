@@ -2,6 +2,7 @@ package zklinknova
 
 import (
 	"context"
+	"log"
 	"os"
 	"time"
 )
@@ -35,7 +36,7 @@ func (client *Client) fetchBatchData() (Batch, error) {
 
 type Batch struct {
 	Number uint64
-	Data []byte
+	Data   []byte
 }
 
 func (client *Client) Poll(ctx context.Context, intervalInMillisecond int64) (chan *Batch, error) {
@@ -53,6 +54,7 @@ func (client *Client) Poll(ctx context.Context, intervalInMillisecond int64) (ch
 					// TODO: re-transmit mechanism
 					return err
 				}
+				log.Printf("Fetch batch data at %d from zklink nova", batch.Number)
 				out <- &batch
 			case <-ctx.Done():
 				return nil

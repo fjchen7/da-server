@@ -1,6 +1,5 @@
 package celestia
 
-
 import (
 	"database/sql"
 	"encoding/json"
@@ -11,11 +10,11 @@ import (
 )
 
 type DBConfig struct {
-	host string
-	port uint64
-	user string
+	host     string
+	port     uint64
+	user     string
 	password string
-	dbname string
+	dbname   string
 }
 
 type DBConnector struct {
@@ -47,7 +46,7 @@ func NewConnectorFromEnv() (*DBConnector, error) {
 	return NewConnector(cfg)
 }
 
-func (c *DBConnector) Close()  {
+func (c *DBConnector) Close() {
 	c.db.Close()
 }
 

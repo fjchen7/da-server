@@ -3,6 +3,7 @@ package eth
 import (
 	"DA-server/celestia"
 	"context"
+	"log"
 	"os"
 )
 
@@ -38,6 +39,7 @@ func (client *Client) Subscribe(ctx context.Context, daProofs <-chan *celestia.D
 				if err != nil {
 					return err
 				}
+				log.Printf("Submit DA Proof at %d to Ethereum Contract", daProof.Height)
 			case <-ctx.Done():
 				return nil
 			}
