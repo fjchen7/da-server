@@ -109,9 +109,9 @@ func (client *Client) GetProof(
 }
 
 type DAProof struct {
-	Height     uint64
-	Commitment blob.Commitment
-	Proof      blob.Proof
+	SubmitHeight uint64
+	Commitment   blob.Commitment
+	Proof        blob.Proof
 }
 
 func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan *DAProof, error) {
@@ -139,15 +139,15 @@ func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.
 				}
 				log.Printf("Fetch DA Proof at %d from Celestia", height)
 				daProof := DAProof{
-					Height:     height,
-					Commitment: *commitment,
-					Proof:      *proof,
+					SubmitHeight: height,
+					Commitment:   *commitment,
+					Proof:        *proof,
 				}
 				err = dbConnector.StoreDAProof(daProof)
 				if err != nil {
 					return err
 				}
-				log.Printf("Store DA Proof at %d to database", daProof.Height)
+				log.Printf("Store DA Proof at %d to database", daProof.SubmitHeight)
 				out <- &daProof
 			case <-ctx.Done():
 				return nil

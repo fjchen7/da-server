@@ -39,7 +39,7 @@ func (client *Client) Subscribe(ctx context.Context, daProofs <-chan *celestia.D
 				if err != nil {
 					return err
 				}
-				log.Printf("Submit DA Proof at %d to Ethereum Contract", daProof.Height)
+				log.Printf("Submit DA Proof at %d to Ethereum Contract", daProof.SubmitHeight)
 			case <-ctx.Done():
 				return nil
 			}

@@ -55,7 +55,7 @@ func (c *DBConnector) StoreDAProof(proof DAProof) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.db.Exec("INSERT INTO DAProof (height, commitment, proof) VALUES ($1, $2, $3)", proof.Height, proof.Commitment, proofJson)
+	_, err = c.db.Exec("INSERT INTO DAProof (height, commitment, proof) VALUES ($1, $2, $3)", proof.SubmitHeight, proof.Commitment, proofJson)
 	if err != nil {
 		return err
 	}
