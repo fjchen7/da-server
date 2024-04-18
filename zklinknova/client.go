@@ -2,6 +2,7 @@ package zklinknova
 
 import (
 	"context"
+	"github.com/ybbus/jsonrpc/v3"
 	"log"
 	"os"
 	"time"
@@ -12,10 +13,13 @@ type Config struct {
 }
 
 type Client struct {
+	client jsonrpc.RPCClient
 }
 
 func NewClient(ctx context.Context, cfg Config) (*Client, error) {
-	return &Client{}, nil
+	return &Client{
+		client: jsonrpc.NewClient(cfg.NodeRPCEndpoint),
+	}, nil
 }
 
 func NewClientFromEnv(ctx context.Context) (*Client, error) {
@@ -25,13 +29,22 @@ func NewClientFromEnv(ctx context.Context) (*Client, error) {
 	return NewClient(ctx, cfg)
 }
 
-func (client *Client) fetchBatchData() (Batch, error) {
-	// TODO: implement
-	batch := Batch{
-		Number: 0,
-		Data:   nil,
+const RpcMethod = "zks_getL1BatchDA"
+
+func (client *Client) fetchBatchData(blockNumber uint64) (*Batch, error) {
+	params := []interface{}{blockNumber}
+	response, err := client.client.Call(context.Background(), RpcMethod, &params)
+	if err != nil {
+		return nil, err
 	}
-	return batch, nil
+	result := response.Result.(map[string]interface{})
+	// TODO: convert to []byte from hex string
+	data := result["data"].([]byte)
+	batch := Batch{
+		Number: blockNumber,
+		Data:   data,
+	}
+	return &batch, nil
 }
 
 type Batch struct {
@@ -49,13 +62,14 @@ func (client *Client) Poll(ctx context.Context, intervalInMillisecond int64) (ch
 		for {
 			select {
 			case <-ticker.C:
-				batch, err := client.fetchBatchData()
+				// TODO: get block number from DB
+				batch, err := client.fetchBatchData(0)
 				if err != nil {
 					// TODO: re-transmit mechanism
 					return err
 				}
 				log.Printf("Fetch batch data at %d from zklink nova", batch.Number)
-				out <- &batch
+				out <- batch
 			case <-ctx.Done():
 				return nil
 			}
