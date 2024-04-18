@@ -61,3 +61,12 @@ func (c *DBConnector) StoreDAProof(proof DAProof) error {
 	}
 	return nil
 }
+
+func (c *DBConnector) GetMaxStoredHeight() (uint64, error) {
+	var maxHeight uint64
+	err := c.db.QueryRow("SELECT MAX(height) FROM tablename").Scan(&maxHeight)
+	if err != nil {
+		return 0, err
+	}
+	return maxHeight, nil
+}
