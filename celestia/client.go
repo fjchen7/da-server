@@ -1,7 +1,7 @@
 package celestia
 
 import (
-	"DA-server/zklinknova"
+	"da-server/zklinknova"
 	"context"
 	"encoding/hex"
 	"github.com/celestiaorg/celestia-node/api/rpc/client"

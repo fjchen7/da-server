@@ -1,9 +1,9 @@
 package main
 
 import (
-	"DA-server/celestia"
-	"DA-server/eth"
-	"DA-server/zklinknova"
+	"da-server/celestia"
+	"da-server/eth"
+	"da-server/zklinknova"
 	"context"
 	"github.com/joho/godotenv"
 	"log"

@@ -1,8 +1,8 @@
 package eth
 
 import (
-	"DA-server/celestia"
 	"context"
+	"da-server/celestia"
 	"log"
 	"os"
 )

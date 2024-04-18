@@ -1,4 +1,4 @@
-module DA-server
+module da-server
 
 go 1.22.0
 
