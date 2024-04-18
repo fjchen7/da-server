@@ -13,6 +13,13 @@ import (
 	"strings"
 )
 
+const L2ToL1MessageByteLength = 88
+const NamespaceIdBytesLen = 28
+const NamespaceVersionBytesLen = 1
+const NamespaceBytesLen = NamespaceIdBytesLen + NamespaceVersionBytesLen
+const DataArrayCount = 774
+const DataBytesLen = DataArrayCount * L2ToL1MessageByteLength
+
 type Config struct {
 	NodeRPCEndpoint string
 	JWTToken        string
@@ -87,13 +94,13 @@ func NewClientFromEnv(ctx context.Context) (*Client, error) {
 func (client *Client) SubmitBlob(payLoad []byte) (uint64, *blob.Commitment, error) {
 	namespace := client.Namespace
 	gasPrice := client.GasPrice
+	// Resize to fixed length
+	payLoad = append(payLoad, make([]byte, DataBytesLen-len(payLoad))...)
 	submittedBlob, err := blob.NewBlobV0(namespace, payLoad)
 	if err != nil {
 		return 0, nil, err
 	}
-
-	// TODO: calculate commitment
-	commitment := blob.Commitment([]byte{})
+	commitment := submittedBlob.Commitment
 	height, err := client.Internal.Blob.Submit(context.Background(), []*blob.Blob{submittedBlob}, gasPrice)
 	if err != nil {
 		return 0, nil, err
