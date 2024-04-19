@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -22,30 +23,32 @@ func main() {
 
 	dbClient, err := db.NewConnectorFromEnv()
 	if err != nil {
-		log.Fatalf("An error occurred when creating db client: %v\n", err)
+		log.Fatalf("[Error] Encounter error when creating DB client: %v\n", err)
 	}
 
-	celestisClient, err := celestia.NewClientFromEnv1(ctx, dbClient)
+	zklinkClient, err := zklinknova.NewClientFromEnv(ctx, dbClient)
 	if err != nil {
-		log.Fatalf("An error occurred when creating celestia client: %v\n", err)
+		log.Fatalf("[Error] Encounter error when creating ZkLink nova client: %v\n", err)
 	}
-	zklinkClient, err := zklinknova.NewClientFromEnv1(ctx, dbClient)
+	celestisClient, err := celestia.NewClientFromEnv(ctx, dbClient)
 	if err != nil {
-		log.Fatalf("An error occurred when creating zklink nova client: %v\n", err)
+		log.Fatalf("[Error] Encounter error when creating Celestia client: %v\n", err)
 	}
-	ethClient, err := eth.NewClientFromEnv1(ctx, dbClient)
+	ethClient, err := eth.NewClientFromEnv(ctx, dbClient)
 	if err != nil {
-		log.Fatalf("An error occurred when creating ethereum client: %v\n", err)
+		log.Fatalf("[Error] Encounter error when creating Ethereum client: %v\n", err)
 	}
 
 	intervalInMillisecond, err := strconv.ParseInt(os.Getenv("POLLING_INTERNAL_IN_MILLISECOND"), 10, 64)
 	if err != nil {
-		log.Fatalf("An error occurred when reading environment variable POLLING_BATCH_INTERNAL_IN_MILLISECOND: %v\n", err)
+		log.Fatalf("[Error] Encounter error when reading environment variable POLLING_INTERNAL_IN_MILLISECOND: %v\n", err)
 	}
+	log.Printf("interval: %dms\n", intervalInMillisecond)
 
-	zklinkClient.Run(ctx, intervalInMillisecond)
-	celestisClient.Run(ctx, intervalInMillisecond)
-	ethClient.Run(ctx, intervalInMillisecond)
+	interval := time.Duration(intervalInMillisecond) * time.Millisecond
+	zklinkClient.Run(ctx, interval)
+	celestisClient.Run(ctx, interval)
+	ethClient.Run(ctx, interval)
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
