@@ -3,8 +3,11 @@ package eth
 import (
 	"context"
 	"da-server/celestia"
+	"da-server/db"
+	"fmt"
 	"log"
 	"os"
+	"time"
 )
 
 type Config struct {
@@ -12,17 +15,24 @@ type Config struct {
 }
 
 type Client struct {
+	DbClient *db.Client
 }
 
-func NewClient(ctx context.Context, cfg Config) (*Client, error) {
-	return &Client{}, nil
+func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, error) {
+	return &Client{
+		DbClient: dbClient,
+	}, nil
 }
 
 func NewClientFromEnv(ctx context.Context) (*Client, error) {
+	return nil, nil
+}
+
+func NewClientFromEnv1(ctx context.Context, dbClient *db.Client) (*Client, error) {
 	cfg := Config{
 		NodeRPCEndpoint: os.Getenv("ETHEREUM_RPC_ENDPOINT"),
 	}
-	return NewClient(ctx, cfg)
+	return NewClient(ctx, cfg, dbClient)
 }
 
 func (client *Client) submitDAProof(daProof *celestia.DAProof) error {
@@ -30,21 +40,43 @@ func (client *Client) submitDAProof(daProof *celestia.DAProof) error {
 	return nil
 }
 
-func (client *Client) Subscribe(ctx context.Context, daProofs <-chan *celestia.DAProof) error {
-	go func() error {
+func (client *Client) Submit() ([]uint64, error) {
+	records, err := client.DbClient.GetRecordUnsubmittedToCelestia()
+	if err != nil {
+		return nil, err
+	}
+	var submitted []uint64
+	for _, record := range records {
+		// TODO: submit record to Ethereum
+		fmt.Printf("Submit data with block number %d to Ethereum\n", record.BlockNumber)
+		record.SubmitToEth = true
+		err = client.DbClient.Update(&record)
+		if err != nil {
+			return submitted, err
+		}
+		submitted = append(submitted, record.BlockNumber)
+	}
+
+	return submitted, nil
+}
+
+func (client *Client) Run(ctx context.Context, intervalInMillisecond int64) {
+	interval := time.Duration(intervalInMillisecond * 1000)
+	go func() {
+		ticker := time.NewTicker(interval)
 		for {
 			select {
-			case daProof := <-daProofs:
-				err := client.submitDAProof(daProof)
+			case <-ticker.C:
+				submitted, err := client.Submit()
+				log.Printf("Submit data with block number %v\n to Ethereum", submitted)
 				if err != nil {
-					return err
+					log.Printf("[Error] Encounter error when submitting data to Ethereum %s\n", err)
 				}
-				log.Printf("Submit DA Proof at %d to Ethereum Contract", daProof.SubmitHeight)
 			case <-ctx.Done():
-				return nil
+				log.Printf("Ethereum submitting data task is cancelled by user\n")
+				return
 			}
-
 		}
+		ticker.Stop()
 	}()
-	return nil
 }

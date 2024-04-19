@@ -1,9 +1,11 @@
 package celestia
 
 import (
-	"da-server/zklinknova"
 	"context"
+	"da-server/db"
+	"da-server/zklinknova"
 	"encoding/hex"
+	"encoding/json"
 	"github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/blob"
 	"github.com/celestiaorg/celestia-node/share"
@@ -11,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const L2ToL1MessageByteLength = 88
@@ -25,19 +28,18 @@ type Config struct {
 	JWTToken        string
 	Namespace       share.Namespace
 	GasPrice        blob.GasPrice
-	DBConfig        DBConfig
 }
 
 type Client struct {
 	Internal  client.Client
 	Namespace share.Namespace
 	GasPrice  blob.GasPrice
-	DBConfig  DBConfig
+	DbClient  *db.Client
 }
 
 // NewClient creates a new Client with one connection per Namespace with the
 // given token as the authorization token.
-func NewClient(ctx context.Context, cfg Config) (*Client, error) {
+func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, error) {
 	internal, err := client.NewClient(ctx, cfg.NodeRPCEndpoint, cfg.JWTToken)
 	if err != nil {
 		return nil, err
@@ -46,12 +48,17 @@ func NewClient(ctx context.Context, cfg Config) (*Client, error) {
 			Internal:  *internal,
 			Namespace: cfg.Namespace,
 			GasPrice:  cfg.GasPrice,
-			DBConfig:  cfg.DBConfig,
+			DbClient:  dbClient,
 		},
 		nil
 }
 
+// TODO: remove
 func NewClientFromEnv(ctx context.Context) (*Client, error) {
+	return nil, nil
+}
+
+func NewClientFromEnv1(ctx context.Context, dbClient *db.Client) (*Client, error) {
 	namespaceHexStr := os.Getenv("CELESTIA_NAMESPACE")
 	if strings.HasPrefix(namespaceHexStr, "0x") {
 		namespaceHexStr = strings.TrimPrefix(namespaceHexStr, "0x")
@@ -67,27 +74,13 @@ func NewClientFromEnv(ctx context.Context) (*Client, error) {
 		return nil, err
 	}
 
-	portStr := os.Getenv("POSTGRESQL_PORT")
-	port, err := strconv.ParseUint(portStr, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-	dbConfig := DBConfig{
-		host:     os.Getenv("POSTGRESQL_HOST"),
-		port:     port,
-		user:     os.Getenv("POSTGRESQL_USER"),
-		password: os.Getenv("POSTGRESQL_PASSWORD"),
-		dbname:   os.Getenv("POSTGRESQL_DBNAME"),
-	}
-
 	cfg := Config{
 		NodeRPCEndpoint: os.Getenv("CELESTIA_NODE_RPC_ENDPOINT"),
 		JWTToken:        os.Getenv("CELESTIA_NODE_JWT_TOKEN"),
 		Namespace:       namespace,
 		GasPrice:        blob.GasPrice(gasPrice),
-		DBConfig:        dbConfig,
 	}
-	return NewClient(ctx, cfg)
+	return NewClient(ctx, cfg, dbClient)
 }
 
 // SubmitBlob submits a blob data to Celestia node.
@@ -122,45 +115,66 @@ type DAProof struct {
 }
 
 func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan *DAProof, error) {
-	out := make(chan *DAProof)
-	dbConnector, err := NewConnector(client.DBConfig)
+	return nil, nil
+}
+
+func (client *Client) Submit() ([]uint64, error) {
+	records, err := client.DbClient.GetRecordUnsubmittedToCelestia()
 	if err != nil {
 		return nil, err
 	}
-	go func() error {
-		defer close(out)
-		defer dbConnector.Close()
+	var submitted []uint64
+	for _, record := range records {
+		submittedHeight, commitment, err := client.SubmitBlob(record.Data)
+		if err != nil {
+			// TODO: re-transmit mechanism
+			return nil, err
+		}
+		log.Printf("Submit batch with commitment %s to height %d in Celestia\n", hex.EncodeToString(*commitment), submittedHeight)
+
+		log.Printf("Commit data with block number %d to celestia at height %d\n", record.BlockNumber, submittedHeight)
+		proof, err := client.GetProof(submittedHeight, *commitment)
+		if err != nil {
+			// TODO: re-transmit mechanism
+			return nil, err
+		}
+		log.Printf("Get proof at celestia height %d\n", submittedHeight)
+
+		record.SubmittedHeight = submittedHeight
+		record.Commitment = *commitment
+		record.Proof, err = json.Marshal(proof)
+		if err != nil {
+			return nil, err
+		}
+
+		err = client.DbClient.Update(&record)
+		if err != nil {
+			return nil, err
+		}
+		submitted = append(submitted, record.BlockNumber)
+		log.Printf("Save data commitment and proof submitted at Celestia height %d to database\n", record.SubmittedHeight)
+	}
+
+	return submitted, nil
+}
+
+func (client *Client) Run(ctx context.Context, intervalInMillisecond int64) {
+	interval := time.Duration(intervalInMillisecond * 1000)
+	go func() {
+		ticker := time.NewTicker(interval)
 		for {
 			select {
-			case batch := <-batches:
-				height, commitment, err := client.SubmitBlob(batch.Data)
+			case <-ticker.C:
+				submitted, err := client.Submit()
+				log.Printf("Submit data with block number %v to Celestia\n", submitted)
 				if err != nil {
-					// TODO: re-transmit mechanism
-					return err
+					log.Printf("[Error] Encounter error when submitting data to Celestia %s\n", err)
 				}
-				log.Printf("Submit batch at %d with commitment %s to Celestia", height, hex.EncodeToString(*commitment))
-				proof, err := client.GetProof(height, *commitment)
-				if err != nil {
-					// TODO: re-transmit mechanism
-					return err
-				}
-				log.Printf("Fetch DA Proof at %d from Celestia", height)
-				daProof := DAProof{
-					SubmitHeight: height,
-					Commitment:   *commitment,
-					Proof:        *proof,
-				}
-				err = dbConnector.StoreDAProof(daProof)
-				if err != nil {
-					return err
-				}
-				log.Printf("Store DA Proof at %d to database", daProof.SubmitHeight)
-				out <- &daProof
 			case <-ctx.Done():
-				return nil
+				log.Printf("Celestia submitting data task is cancelled by user\n")
+				return
 			}
 
 		}
 	}()
-	return out, nil
 }
