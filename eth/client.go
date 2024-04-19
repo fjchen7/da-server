@@ -24,11 +24,7 @@ func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, e
 	}, nil
 }
 
-func NewClientFromEnv(ctx context.Context) (*Client, error) {
-	return nil, nil
-}
-
-func NewClientFromEnv1(ctx context.Context, dbClient *db.Client) (*Client, error) {
+func NewClientFromEnv(ctx context.Context, dbClient *db.Client) (*Client, error) {
 	cfg := Config{
 		NodeRPCEndpoint: os.Getenv("ETHEREUM_RPC_ENDPOINT"),
 	}
@@ -60,8 +56,7 @@ func (client *Client) Submit() ([]uint64, error) {
 	return submitted, nil
 }
 
-func (client *Client) Run(ctx context.Context, intervalInMillisecond int64) {
-	interval := time.Duration(intervalInMillisecond * 1000)
+func (client *Client) Run(ctx context.Context, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		for {

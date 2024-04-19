@@ -3,6 +3,7 @@ package zklinknova
 import (
 	"context"
 	"da-server/db"
+	"encoding/hex"
 	"github.com/ybbus/jsonrpc/v3"
 	"log"
 	"os"
@@ -25,11 +26,7 @@ func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, e
 	}, nil
 }
 
-func NewClientFromEnv(ctx context.Context) (*Client, error) {
-	return nil, nil
-}
-
-func NewClientFromEnv1(ctx context.Context, dbClient *db.Client) (*Client, error) {
+func NewClientFromEnv(ctx context.Context, dbClient *db.Client) (*Client, error) {
 	cfg := Config{
 		NodeRPCEndpoint: os.Getenv("ZKLINK_NOVA_RPC_ENDPOINT"),
 	}
@@ -46,7 +43,11 @@ func (client *Client) FetchData(blockNumber uint64) (*Batch, error) {
 	}
 	result := response.Result.(map[string]interface{})
 	// TODO: convert to []byte from hex string
-	data := result["data"].([]byte)
+	dataHex := result["data"].(string)[2:]
+	data, err := hex.DecodeString(dataHex)
+	if err != nil {
+		return nil, err
+	}
 	batch := Batch{
 		Number: blockNumber,
 		Data:   data,
@@ -66,9 +67,13 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 		return 0, err
 	}
 	blockNumber += 1
+	log.Printf("Fetching data with block number %d", blockNumber)
 	batch, err := client.FetchData(blockNumber)
 	if err != nil {
 		return blockNumber, err
+	}
+	if batch == nil {
+		return 0, nil
 	}
 	record := &db.Record{
 		BlockNumber:     blockNumber,
@@ -86,12 +91,7 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 	return blockNumber, nil
 }
 
-func (client *Client) Poll(ctx context.Context, intervalInMillisecond int64) (chan *Batch, error) {
-	return nil, nil
-}
-
-func (client *Client) Run(ctx context.Context, intervalInMillisecond int64) {
-	interval := time.Duration(intervalInMillisecond * 1000)
+func (client *Client) Run(ctx context.Context, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		for {

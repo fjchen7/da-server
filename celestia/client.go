@@ -53,12 +53,7 @@ func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, e
 		nil
 }
 
-// TODO: remove
-func NewClientFromEnv(ctx context.Context) (*Client, error) {
-	return nil, nil
-}
-
-func NewClientFromEnv1(ctx context.Context, dbClient *db.Client) (*Client, error) {
+func NewClientFromEnv(ctx context.Context, dbClient *db.Client) (*Client, error) {
 	namespaceHexStr := os.Getenv("CELESTIA_NAMESPACE")
 	if strings.HasPrefix(namespaceHexStr, "0x") {
 		namespaceHexStr = strings.TrimPrefix(namespaceHexStr, "0x")
@@ -125,14 +120,13 @@ func (client *Client) Submit() ([]uint64, error) {
 	}
 	var submitted []uint64
 	for _, record := range records {
+		log.Printf("Find uncommitted data with block number %d\n", record.BlockNumber)
 		submittedHeight, commitment, err := client.SubmitBlob(record.Data)
 		if err != nil {
 			// TODO: re-transmit mechanism
 			return nil, err
 		}
-		log.Printf("Submit batch with commitment %s to height %d in Celestia\n", hex.EncodeToString(*commitment), submittedHeight)
-
-		log.Printf("Commit data with block number %d to celestia at height %d\n", record.BlockNumber, submittedHeight)
+		log.Printf("Commit data with block number %d to Celestia at height %d\n", record.BlockNumber, submittedHeight)
 		proof, err := client.GetProof(submittedHeight, *commitment)
 		if err != nil {
 			// TODO: re-transmit mechanism
@@ -158,8 +152,7 @@ func (client *Client) Submit() ([]uint64, error) {
 	return submitted, nil
 }
 
-func (client *Client) Run(ctx context.Context, intervalInMillisecond int64) {
-	interval := time.Duration(intervalInMillisecond * 1000)
+func (client *Client) Run(ctx context.Context, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		for {
@@ -168,7 +161,7 @@ func (client *Client) Run(ctx context.Context, intervalInMillisecond int64) {
 				submitted, err := client.Submit()
 				log.Printf("Submit data with block number %v to Celestia\n", submitted)
 				if err != nil {
-					log.Printf("[Error] Encounter error when submitting data to Celestia %s\n", err)
+					log.Printf("[Error] Encounter error when submitting data to Celestia: %+v\n", err)
 				}
 			case <-ctx.Done():
 				log.Printf("Celestia submitting data task is cancelled by user\n")
