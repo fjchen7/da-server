@@ -52,12 +52,13 @@ func (c *Client) Close() {
 }
 
 type Record struct {
-	BlockNumber     uint64
+	tableName       struct{} `pg:"data"`
+	BlockNumber     uint64   `pg:",pk"` // Primary key
 	Data            []byte
 	SubmittedHeight uint64 // celestia height the data submits to
 	Commitment      []byte
 	Proof           []byte
-	SubmitToEth     bool
+	SubmitToEth     bool `pg:"default:false"`
 }
 
 func (c *Client) Insert(record *Record) error {
@@ -78,12 +79,12 @@ func (c *Client) Update(record *Record) error {
 }
 
 func (c *Client) MaxBlockNumber() (uint64, error) {
-	record := new(Record)
-	err := c.Internal.Model(record).ColumnExpr("Max(block_number)").Select()
+	var blockNumber uint64
+	err := c.Internal.Model((*Record)(nil)).ColumnExpr("MAX(record.block_number)").Select(&blockNumber)
 	if err != nil {
 		return 0, err
 	}
-	return record.BlockNumber, nil
+	return blockNumber, nil
 }
 
 func (c *Client) GetRecord(blockNumber uint64) (*Record, error) {
@@ -98,8 +99,10 @@ func (c *Client) GetRecord(blockNumber uint64) (*Record, error) {
 
 func (c *Client) GetRecordUnsubmittedToCelestia() ([]Record, error) {
 	var records []Record
-	err := c.Internal.Model(records).
-		Where("submitted_height = 0").Select()
+	err := c.Internal.Model(&records).
+		Where("submitted_height IS NULL").
+		Limit(100).
+		Select()
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +111,10 @@ func (c *Client) GetRecordUnsubmittedToCelestia() ([]Record, error) {
 
 func (c *Client) GetRecordUnsubmittedToEth() ([]Record, error) {
 	var records []Record
-	err := c.Internal.Model(records).
-		Where("submit_to_eth = false").Select()
+	err := c.Internal.Model(&records).
+		Where("submit_to_eth = FALSE").
+		Limit(100).
+		Select()
 	if err != nil {
 		return nil, err
 	}
