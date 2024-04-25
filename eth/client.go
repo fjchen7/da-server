@@ -5,7 +5,7 @@ import (
 	"da-server/celestia"
 	"da-server/db"
 	"fmt"
-	"log"
+	"github.com/rs/zerolog/log"
 	"os"
 	"time"
 )
@@ -41,6 +41,8 @@ func (client *Client) Submit() ([]uint64, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Info().
+		Msgf("%d Celestia-uncommitted data found in DB", len(records))
 	var submitted []uint64
 	for _, record := range records {
 		// TODO: submit record to Ethereum
@@ -62,13 +64,14 @@ func (client *Client) Run(ctx context.Context, interval time.Duration) {
 		for {
 			select {
 			case <-ticker.C:
-				submitted, err := client.Submit()
-				log.Printf("Submit data with block number %v\n to Ethereum", submitted)
+				_, err := client.Submit()
 				if err != nil {
-					log.Printf("[Error] Encounter error when submitting data to Ethereum %s\n", err)
+					log.Debug().
+						Err(err).
+						Msg("error submitting data to Ethereum")
 				}
 			case <-ctx.Done():
-				log.Printf("Ethereum submitting data task is cancelled by user\n")
+				log.Info().Msg("Ethereum submitting data task is cancelled by user")
 				return
 			}
 		}

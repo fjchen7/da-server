@@ -10,7 +10,9 @@ import (
 	"github.com/celestiaorg/celestia-node/blob"
 	"github.com/celestiaorg/celestia-node/share"
 	"github.com/celestiaorg/celestia-node/state"
-	"log"
+	"github.com/rs/zerolog/log"
+
+	//"log"
 	"math/big"
 	"os"
 	"strconv"
@@ -151,9 +153,13 @@ func (client *Client) Submit() ([]uint64, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Info().
+		Msgf("%d Celestia-uncommitted data found in DB", len(records))
 	var submitted []uint64
 	for _, record := range records {
-		log.Printf("Find uncommitted data with block number %d\n", record.BatchNumber)
+		log.Info().
+			Uint64("batch_number", record.BatchNumber).
+			Msg("find uncommitted data in DB")
 		res, err := client.SubmitBlob(record.Data)
 		if err != nil {
 			// TODO: re-transmit mechanism
@@ -171,7 +177,10 @@ func (client *Client) Submit() ([]uint64, error) {
 			return nil, err
 		}
 		submitted = append(submitted, record.BatchNumber)
-		log.Printf("Save data commitment and proof submitted at Celestia height %d to database\n", record.CommittedHeight)
+		log.Info().
+			Uint64("committed_height", record.CommittedHeight).
+			Hex("committed_tx_hash", record.CommittedTxHash).
+			Msg("save data submitted at Celestia to DB")
 	}
 
 	return submitted, nil
@@ -183,13 +192,14 @@ func (client *Client) Run(ctx context.Context, interval time.Duration) {
 		for {
 			select {
 			case <-ticker.C:
-				submitted, err := client.Submit()
-				log.Printf("Submit data with block number %v to Celestia\n", submitted)
+				_, err := client.Submit()
 				if err != nil {
-					log.Printf("[Error] Encounter error when submitting data to Celestia: %+v\n", err)
+					log.Debug().
+						Err(err).
+						Msg("error submitting data to Celestia")
 				}
 			case <-ctx.Done():
-				log.Printf("Celestia submitting data task is cancelled by user\n")
+				log.Info().Msg("Celestia submitting data task is cancelled by user")
 				return
 			}
 

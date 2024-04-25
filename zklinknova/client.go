@@ -4,8 +4,8 @@ import (
 	"context"
 	"da-server/db"
 	"encoding/hex"
+	"github.com/rs/zerolog/log"
 	"github.com/ybbus/jsonrpc/v3"
-	"log"
 	"os"
 	"time"
 )
@@ -61,22 +61,25 @@ type Batch struct {
 }
 
 func (client *Client) FetchAndStoreData() (uint64, error) {
-	var blockNumber uint64
-	blockNumber, err := client.DbClient.MaxBatchNumber()
+	var batchNumber uint64
+	batchNumber, err := client.DbClient.MaxBatchNumber()
 	if err != nil {
 		return 0, err
 	}
-	blockNumber += 1
-	log.Printf("Fetching data with block number %d", blockNumber)
-	batch, err := client.FetchData(blockNumber)
+	batchNumber += 1
+	log.Info().
+		Uint64("batch_number", batchNumber).
+		Err(err).
+		Msg("fetching data from zklink nova")
+	batch, err := client.FetchData(batchNumber)
 	if err != nil {
-		return blockNumber, err
+		return batchNumber, err
 	}
 	if batch == nil {
 		return 0, nil
 	}
 	record := &db.Record{
-		BatchNumber:     blockNumber,
+		BatchNumber:     batchNumber,
 		Data:            batch.Data,
 		CommittedHeight: 0,
 		CommittedTxHash: nil,
@@ -85,10 +88,10 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 	}
 	err = client.DbClient.Insert(record)
 	if err != nil {
-		return blockNumber, err
+		return batchNumber, err
 	}
 
-	return blockNumber, nil
+	return batchNumber, nil
 }
 
 func (client *Client) Run(ctx context.Context, interval time.Duration) {
@@ -97,14 +100,19 @@ func (client *Client) Run(ctx context.Context, interval time.Duration) {
 		for {
 			select {
 			case <-ticker.C:
-				blockNumber, err := client.FetchAndStoreData()
+				batchNumber, err := client.FetchAndStoreData()
 				if err != nil {
-					log.Printf("[Error] Encounter error when fetching data with block number %d from zklink nova: %s", blockNumber, err)
+					log.Debug().
+						Uint64("batch_number", batchNumber).
+						Err(err).
+						Msg("error store data from ZkLink Nova to DB")
 				} else {
-					log.Printf("Fetch data with block number %d and store to DB", blockNumber)
+					log.Debug().
+						Uint64("batch_number", batchNumber).
+						Msg("fetch data from ZkLink Nova and store to DB")
 				}
 			case <-ctx.Done():
-				log.Printf("zklink nova fetching data task is cancelled by user")
+				log.Info().Msg("ZkLink Nova fetching data task is cancelled by user")
 				return
 			}
 
