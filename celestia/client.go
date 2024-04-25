@@ -2,14 +2,16 @@ package celestia
 
 import (
 	"context"
+	"cosmossdk.io/math"
 	"da-server/db"
 	"da-server/zklinknova"
 	"encoding/hex"
-	"encoding/json"
 	"github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/blob"
 	"github.com/celestiaorg/celestia-node/share"
+	"github.com/celestiaorg/celestia-node/state"
 	"log"
+	"math/big"
 	"os"
 	"strconv"
 	"strings"
@@ -27,13 +29,15 @@ type Config struct {
 	NodeRPCEndpoint string
 	JWTToken        string
 	Namespace       share.Namespace
-	GasPrice        blob.GasPrice
+	Fee             state.Int
+	GasLimit        uint64
 }
 
 type Client struct {
 	Internal  client.Client
 	Namespace share.Namespace
-	GasPrice  blob.GasPrice
+	Fee       state.Int
+	GasLimit  uint64
 	DbClient  *db.Client
 }
 
@@ -47,7 +51,8 @@ func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, e
 	return &Client{
 			Internal:  *internal,
 			Namespace: cfg.Namespace,
-			GasPrice:  cfg.GasPrice,
+			Fee:       cfg.Fee,
+			GasLimit:  cfg.GasLimit,
 			DbClient:  dbClient,
 		},
 		nil
@@ -63,37 +68,65 @@ func NewClientFromEnv(ctx context.Context, dbClient *db.Client) (*Client, error)
 		return nil, err
 	}
 
-	gasPriceStr := os.Getenv("CELESTIA_GASPRICE")
-	gasPrice, err := strconv.ParseFloat(gasPriceStr, 64)
+	gasLimitStr := os.Getenv("CELESTIA_GAS_LIMIT")
+	gasLimit, err := strconv.ParseUint(gasLimitStr, 10, 64)
 	if err != nil {
 		return nil, err
 	}
+
+	feeStr := os.Getenv("CELESTIA_FEE")
+	fee, _ := new(big.Int).SetString(feeStr, 10)
 
 	cfg := Config{
 		NodeRPCEndpoint: os.Getenv("CELESTIA_NODE_RPC_ENDPOINT"),
 		JWTToken:        os.Getenv("CELESTIA_NODE_JWT_TOKEN"),
 		Namespace:       namespace,
-		GasPrice:        blob.GasPrice(gasPrice),
+		Fee:             math.NewIntFromBigInt(fee),
+		GasLimit:        gasLimit,
 	}
 	return NewClient(ctx, cfg, dbClient)
 }
 
+type BlobSubmitResponse struct {
+	Data       []byte
+	TxHash     []byte
+	Height     int64
+	Commitment blob.Commitment
+}
+
 // SubmitBlob submits a blob data to Celestia node.
-func (client *Client) SubmitBlob(payLoad []byte) (uint64, *blob.Commitment, error) {
+func (client *Client) SubmitBlob(payLoad []byte) (*BlobSubmitResponse, error) {
 	namespace := client.Namespace
-	gasPrice := client.GasPrice
+	fee := client.Fee
+	gasLimit := client.GasLimit
 	// Resize to fixed length
 	payLoad = append(payLoad, make([]byte, DataBytesLen-len(payLoad))...)
 	submittedBlob, err := blob.NewBlobV0(namespace, payLoad)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 	commitment := submittedBlob.Commitment
-	height, err := client.Internal.Blob.Submit(context.Background(), []*blob.Blob{submittedBlob}, gasPrice)
+	txRes, err := client.Internal.State.SubmitPayForBlob(context.Background(), fee, gasLimit, []*blob.Blob{submittedBlob})
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
-	return height, &commitment, nil
+	txHashStr := txRes.TxHash
+	if strings.HasPrefix(txHashStr, "0x") {
+		txHashStr = strings.TrimPrefix(txHashStr, "0x")
+	}
+	txHash, err := hex.DecodeString(txHashStr)
+	if err != nil {
+		return nil, err
+	}
+
+	res := BlobSubmitResponse{
+		Data:       payLoad,
+		TxHash:     txHash,
+		Height:     txRes.Height,
+		Commitment: commitment,
+	}
+
+	return &res, nil
 }
 
 func (client *Client) GetProof(
@@ -121,22 +154,14 @@ func (client *Client) Submit() ([]uint64, error) {
 	var submitted []uint64
 	for _, record := range records {
 		log.Printf("Find uncommitted data with block number %d\n", record.BlockNumber)
-		submittedHeight, commitment, err := client.SubmitBlob(record.Data)
+		res, err := client.SubmitBlob(record.Data)
 		if err != nil {
 			// TODO: re-transmit mechanism
 			return nil, err
 		}
-		log.Printf("Commit data with block number %d to Celestia at height %d\n", record.BlockNumber, submittedHeight)
-		proof, err := client.GetProof(submittedHeight, *commitment)
-		if err != nil {
-			// TODO: re-transmit mechanism
-			return nil, err
-		}
-		log.Printf("Get proof at celestia height %d\n", submittedHeight)
-
-		record.SubmittedHeight = submittedHeight
-		record.Commitment = *commitment
-		record.Proof, err = json.Marshal(proof)
+		record.SubmittedTxHash = res.TxHash
+		record.SubmittedHeight = uint64(res.Height)
+		record.Commitment = res.Commitment
 		if err != nil {
 			return nil, err
 		}

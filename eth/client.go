@@ -37,7 +37,7 @@ func (client *Client) submitDAProof(daProof *celestia.DAProof) error {
 }
 
 func (client *Client) Submit() ([]uint64, error) {
-	records, err := client.DbClient.GetRecordUnsubmittedToCelestia()
+	records, err := client.DbClient.GetRecordUnsubmittedToEth()
 	if err != nil {
 		return nil, err
 	}

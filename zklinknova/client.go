@@ -79,8 +79,8 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 		BlockNumber:     blockNumber,
 		Data:            batch.Data,
 		SubmittedHeight: 0,
+		SubmittedTxHash: nil,
 		Commitment:      nil,
-		Proof:           nil,
 		SubmitToEth:     false,
 	}
 	err = client.DbClient.Insert(record)

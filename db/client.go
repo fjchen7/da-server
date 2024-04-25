@@ -56,8 +56,8 @@ type Record struct {
 	BlockNumber     uint64   `pg:",pk"` // Primary key
 	Data            []byte
 	SubmittedHeight uint64 // celestia height the data submits to
+	SubmittedTxHash []byte // celestia txHash the data submits to
 	Commitment      []byte
-	Proof           []byte
 	SubmitToEth     bool `pg:"default:false"`
 }
 
