@@ -147,20 +147,20 @@ func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.
 }
 
 func (client *Client) Submit() ([]uint64, error) {
-	records, err := client.DbClient.GetRecordUnsubmittedToCelestia()
+	records, err := client.DbClient.GetRecordUncommittedToCelestia()
 	if err != nil {
 		return nil, err
 	}
 	var submitted []uint64
 	for _, record := range records {
-		log.Printf("Find uncommitted data with block number %d\n", record.BlockNumber)
+		log.Printf("Find uncommitted data with block number %d\n", record.BatchNumber)
 		res, err := client.SubmitBlob(record.Data)
 		if err != nil {
 			// TODO: re-transmit mechanism
 			return nil, err
 		}
-		record.SubmittedTxHash = res.TxHash
-		record.SubmittedHeight = uint64(res.Height)
+		record.CommittedTxHash = res.TxHash
+		record.CommittedHeight = uint64(res.Height)
 		record.Commitment = res.Commitment
 		if err != nil {
 			return nil, err
@@ -170,8 +170,8 @@ func (client *Client) Submit() ([]uint64, error) {
 		if err != nil {
 			return nil, err
 		}
-		submitted = append(submitted, record.BlockNumber)
-		log.Printf("Save data commitment and proof submitted at Celestia height %d to database\n", record.SubmittedHeight)
+		submitted = append(submitted, record.BatchNumber)
+		log.Printf("Save data commitment and proof submitted at Celestia height %d to database\n", record.CommittedHeight)
 	}
 
 	return submitted, nil

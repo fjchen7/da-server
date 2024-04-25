@@ -53,10 +53,10 @@ func (c *Client) Close() {
 
 type Record struct {
 	tableName       struct{} `pg:"data"`
-	BlockNumber     uint64   `pg:",pk"` // Primary key
+	BatchNumber     uint64   `pg:",pk"` // Primary key
 	Data            []byte
-	SubmittedHeight uint64 // celestia height the data submits to
-	SubmittedTxHash []byte // celestia txHash the data submits to
+	CommittedHeight uint64 // celestia height the data submits to
+	CommittedTxHash []byte // celestia txHash the data submits to
 	Commitment      []byte
 	SubmitToEth     bool `pg:"default:false"`
 }
@@ -71,16 +71,16 @@ func (c *Client) Insert(record *Record) error {
 
 func (c *Client) Update(record *Record) error {
 	_, err := c.Internal.Model(record).
-		Where("block_number = ?", record.BlockNumber).Update()
+		Where("batch_number = ?", record.BatchNumber).Update()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (c *Client) MaxBlockNumber() (uint64, error) {
+func (c *Client) MaxBatchNumber() (uint64, error) {
 	var blockNumber uint64
-	err := c.Internal.Model((*Record)(nil)).ColumnExpr("MAX(record.block_number)").Select(&blockNumber)
+	err := c.Internal.Model((*Record)(nil)).ColumnExpr("MAX(record.batch_number)").Select(&blockNumber)
 	if err != nil {
 		return 0, err
 	}
@@ -90,17 +90,17 @@ func (c *Client) MaxBlockNumber() (uint64, error) {
 func (c *Client) GetRecord(blockNumber uint64) (*Record, error) {
 	record := new(Record)
 	err := c.Internal.Model(record).
-		Where("block_number = ?", blockNumber).Select()
+		Where("batch_number = ?", blockNumber).Select()
 	if err != nil {
 		return nil, err
 	}
 	return record, nil
 }
 
-func (c *Client) GetRecordUnsubmittedToCelestia() ([]Record, error) {
+func (c *Client) GetRecordUncommittedToCelestia() ([]Record, error) {
 	var records []Record
 	err := c.Internal.Model(&records).
-		Where("submitted_height IS NULL").
+		Where("committed_height IS NULL").
 		Limit(100).
 		Select()
 	if err != nil {

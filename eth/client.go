@@ -44,13 +44,13 @@ func (client *Client) Submit() ([]uint64, error) {
 	var submitted []uint64
 	for _, record := range records {
 		// TODO: submit record to Ethereum
-		fmt.Printf("Submit data with block number %d to Ethereum\n", record.BlockNumber)
+		fmt.Printf("Submit data with block number %d to Ethereum\n", record.BatchNumber)
 		record.SubmitToEth = true
 		err = client.DbClient.Update(&record)
 		if err != nil {
 			return submitted, err
 		}
-		submitted = append(submitted, record.BlockNumber)
+		submitted = append(submitted, record.BatchNumber)
 	}
 
 	return submitted, nil

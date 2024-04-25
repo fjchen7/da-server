@@ -62,7 +62,7 @@ type Batch struct {
 
 func (client *Client) FetchAndStoreData() (uint64, error) {
 	var blockNumber uint64
-	blockNumber, err := client.DbClient.MaxBlockNumber()
+	blockNumber, err := client.DbClient.MaxBatchNumber()
 	if err != nil {
 		return 0, err
 	}
@@ -76,10 +76,10 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 		return 0, nil
 	}
 	record := &db.Record{
-		BlockNumber:     blockNumber,
+		BatchNumber:     blockNumber,
 		Data:            batch.Data,
-		SubmittedHeight: 0,
-		SubmittedTxHash: nil,
+		CommittedHeight: 0,
+		CommittedTxHash: nil,
 		Commitment:      nil,
 		SubmitToEth:     false,
 	}
