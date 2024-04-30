@@ -6,15 +6,15 @@ import (
 )
 
 type Record struct {
-	tableName       struct{} `pg:"data"`
-	BatchNumber     uint64   `pg:"batch_number,pk"` // Primary key
-	Data            []byte
-	CommittedHeight uint64 // celestia height the data submits to
-	CommittedTxHash []byte // celestia txHash the data submits to
-	Commitment      []byte
-	ConfirmedToEth  bool      `pg:"default:false"`
-	CreatedAt       time.Time `pg:"default:now()"`
-	UpdatedAt       time.Time
+	tableName               struct{} `pg:"data"`
+	BatchNumber             uint64   `pg:"batch_number,pk"` // Primary key
+	Data                    []byte
+	CelestiaCommittedHeight uint64 // celestia height the data submits to
+	CelestiaCommittedTxHash []byte // celestia txHash the data submits to
+	CelestiaCommitment      []byte
+	ConfirmedInEth          bool      `pg:"default:false"`
+	CreatedAt               time.Time `pg:"default:now()"`
+	UpdatedAt               time.Time
 }
 
 type ConfirmStatus string

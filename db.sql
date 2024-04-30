@@ -1,13 +1,13 @@
 CREATE TABLE data
 (
-    batch_number      BIGINT,
-    data              BYTEA,
-    committed_height  BIGINT,
-    committed_tx_hash BYTEA,
-    commitment        BYTEA,
-    submit_to_eth     BOOLEAN DEFAULT false,
-    created_at        TIMESTAMPTZ,
-    updated_at        TIMESTAMPTZ,
+    batch_number               BIGINT,
+    data                       BYTEA,
+    celestia_committed_height  BIGINT,
+    celestia_committed_tx_hash BYTEA,
+    celestia_commitment        BYTEA,
+    confirmed_in_eth           BOOLEAN DEFAULT false,
+    created_at                 TIMESTAMPTZ,
+    updated_at                 TIMESTAMPTZ,
     PRIMARY KEY (batch_number)
 );
 

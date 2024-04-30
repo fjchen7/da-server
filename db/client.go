@@ -147,7 +147,7 @@ func (c *Client) GetRecord(batchNumber uint64) (*Record, error) {
 func (c *Client) GetRecordUncommittedToCelestia() ([]Record, error) {
 	var records []Record
 	err := c.Internal.Model(&records).
-		Where("committed_height IS NULL").
+		Where("celestia_committed_height IS NULL").
 		Limit(100).
 		Select()
 	if err != nil {
@@ -262,7 +262,7 @@ func (c *Client) GetRecordUnsubmittedToEth(maxCelestiaHeight uint64) ([]Record, 
 	var records []Record
 	err := c.Internal.Model(&records).
 		Where("confirmed_in_eth = ?", false).
-		Where("committed_height < ?", maxCelestiaHeight).
+		Where("celestia_committed_height < ?", maxCelestiaHeight).
 		Select()
 	// Should I check if sent time of latest sent tx for this batch number > a given time?
 	if err != nil {

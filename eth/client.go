@@ -124,11 +124,11 @@ func (c *Client) Submit(ctx context.Context, celestiaLatestHeight uint64) ([]uin
 	for _, record := range records {
 		nonce++
 		txOpts.Nonce.SetUint64(nonce)
-		tx, err := c.VerifyProofAndRecordWithGasEstimate(record.CommittedTxHash, txOpts)
+		tx, err := c.VerifyProofAndRecordWithGasEstimate(record.CelestiaCommittedTxHash, txOpts)
 		if err != nil {
 			log.Debug().
 				Uint64("batch_number", record.BatchNumber).
-				Hex("celestia_tx_hash", record.CommittedTxHash).
+				Hex("celestia_tx_hash", record.CelestiaCommittedTxHash).
 				Err(err).
 				Msg("error verify and record data in Ethereum")
 			continue
@@ -143,7 +143,7 @@ func (c *Client) Submit(ctx context.Context, celestiaLatestHeight uint64) ([]uin
 		if err != nil {
 			log.Debug().
 				Uint64("batch_number", record.BatchNumber).
-				Hex("celestia_tx_hash", record.CommittedTxHash).
+				Hex("celestia_tx_hash", record.CelestiaCommittedTxHash).
 				Hex("eth_tx_hash", dbTx.Hash[:]).
 				Err(err).
 				Msg("error verify and record data in Ethereum")

@@ -79,12 +79,12 @@ func (c *Client) FetchAndStoreData() (uint64, error) {
 		return 0, nil
 	}
 	record := &db.Record{
-		BatchNumber:     batchNumber,
-		Data:            batch.Data,
-		CommittedHeight: 0,
-		CommittedTxHash: nil,
-		Commitment:      nil,
-		ConfirmedToEth:  false,
+		BatchNumber:             batchNumber,
+		Data:                    batch.Data,
+		CelestiaCommittedHeight: 0,
+		CelestiaCommittedTxHash: nil,
+		CelestiaCommitment:      nil,
+		ConfirmedInEth:          false,
 	}
 	err = c.Db.InsertRecord(record)
 	if err != nil {

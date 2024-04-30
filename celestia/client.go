@@ -171,9 +171,9 @@ func (c *Client) Submit() ([]uint64, error) {
 			// TODO: re-transmit mechanism
 			return nil, err
 		}
-		record.CommittedTxHash = res.TxHash
-		record.CommittedHeight = uint64(res.Height)
-		record.Commitment = res.Commitment
+		record.CelestiaCommittedTxHash = res.TxHash
+		record.CelestiaCommittedHeight = uint64(res.Height)
+		record.CelestiaCommitment = res.Commitment
 		if err != nil {
 			return nil, err
 		}
@@ -184,8 +184,8 @@ func (c *Client) Submit() ([]uint64, error) {
 		}
 		submitted = append(submitted, record.BatchNumber)
 		log.Info().
-			Uint64("committed_height", record.CommittedHeight).
-			Hex("committed_tx_hash", record.CommittedTxHash).
+			Uint64("celestia_committed_height", record.CelestiaCommittedHeight).
+			Hex("committed_tx_hash", record.CelestiaCommittedTxHash).
 			Msg("save data submitted at Celestia to DB")
 	}
 
