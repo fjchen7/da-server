@@ -1,4 +1,4 @@
-package client
+package contract
 
 import "math/big"
 
@@ -24,14 +24,13 @@ type Namespace struct {
 }
 
 type NamespaceNode struct {
-	Min Namespace
-	Max Namespace
+	Min    Namespace
+	Max    Namespace
 	Digest [32]byte
 }
 
 type NamespaceMerkleMultiproof struct {
-
-	BeginKey *big.Int
-	EndKey *big.Int
+	BeginKey  *big.Int
+	EndKey    *big.Int
 	SideNodes []NamespaceNode
 }

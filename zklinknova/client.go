@@ -15,15 +15,16 @@ type Config struct {
 }
 
 type Client struct {
-	client   jsonrpc.RPCClient
-	DbClient *db.Client
+	client jsonrpc.RPCClient
+	Db     *db.Client
 }
 
 func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, error) {
 	return &Client{
-		client:   jsonrpc.NewClient(cfg.NodeRPCEndpoint),
-		DbClient: dbClient,
+		client: jsonrpc.NewClient(cfg.NodeRPCEndpoint),
+		Db:     dbClient,
 	}, nil
+
 }
 
 func NewClientFromEnv(ctx context.Context, dbClient *db.Client) (*Client, error) {
@@ -35,14 +36,13 @@ func NewClientFromEnv(ctx context.Context, dbClient *db.Client) (*Client, error)
 
 const RpcMethod = "zks_getL1BatchDA"
 
-func (client *Client) FetchData(blockNumber uint64) (*Batch, error) {
+func (c *Client) FetchData(blockNumber uint64) (*Batch, error) {
 	params := []interface{}{blockNumber}
-	response, err := client.client.Call(context.Background(), RpcMethod, &params)
+	response, err := c.client.Call(context.Background(), RpcMethod, &params)
 	if err != nil {
 		return nil, err
 	}
 	result := response.Result.(map[string]interface{})
-	// TODO: convert to []byte from hex string
 	dataHex := result["data"].(string)[2:]
 	data, err := hex.DecodeString(dataHex)
 	if err != nil {
@@ -60,9 +60,9 @@ type Batch struct {
 	Data   []byte
 }
 
-func (client *Client) FetchAndStoreData() (uint64, error) {
+func (c *Client) FetchAndStoreData() (uint64, error) {
 	var batchNumber uint64
-	batchNumber, err := client.DbClient.MaxBatchNumber()
+	batchNumber, err := c.Db.MaxBatchNumber()
 	if err != nil {
 		return 0, err
 	}
@@ -71,7 +71,7 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 		Uint64("batch_number", batchNumber).
 		Err(err).
 		Msg("fetching data from zklink nova")
-	batch, err := client.FetchData(batchNumber)
+	batch, err := c.FetchData(batchNumber)
 	if err != nil {
 		return batchNumber, err
 	}
@@ -84,9 +84,9 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 		CommittedHeight: 0,
 		CommittedTxHash: nil,
 		Commitment:      nil,
-		SubmitToEth:     false,
+		ConfirmedToEth:  false,
 	}
-	err = client.DbClient.Insert(record)
+	err = c.Db.InsertRecord(record)
 	if err != nil {
 		return batchNumber, err
 	}
@@ -94,13 +94,13 @@ func (client *Client) FetchAndStoreData() (uint64, error) {
 	return batchNumber, nil
 }
 
-func (client *Client) Run(ctx context.Context, interval time.Duration) {
+func (c *Client) Run(ctx context.Context, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		for {
 			select {
 			case <-ticker.C:
-				batchNumber, err := client.FetchAndStoreData()
+				batchNumber, err := c.FetchAndStoreData()
 				if err != nil {
 					log.Debug().
 						Uint64("batch_number", batchNumber).

@@ -40,12 +40,13 @@ type Client struct {
 	Namespace share.Namespace
 	Fee       state.Int
 	GasLimit  uint64
-	DbClient  *db.Client
+	Db        *db.Client
 }
 
 // NewClient creates a new Client with one connection per Namespace with the
 // given token as the authorization token.
 func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, error) {
+	// Creating JSONRPC client
 	internal, err := client.NewClient(ctx, cfg.NodeRPCEndpoint, cfg.JWTToken)
 	if err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func NewClient(ctx context.Context, cfg Config, dbClient *db.Client) (*Client, e
 			Namespace: cfg.Namespace,
 			Fee:       cfg.Fee,
 			GasLimit:  cfg.GasLimit,
-			DbClient:  dbClient,
+			Db:        dbClient,
 		},
 		nil
 }
@@ -89,6 +90,10 @@ func NewClientFromEnv(ctx context.Context, dbClient *db.Client) (*Client, error)
 	return NewClient(ctx, cfg, dbClient)
 }
 
+func (c *Client) Close() {
+	c.Internal.Close()
+}
+
 type BlobSubmitResponse struct {
 	Data       []byte
 	TxHash     []byte
@@ -97,10 +102,11 @@ type BlobSubmitResponse struct {
 }
 
 // SubmitBlob submits a blob data to Celestia node.
-func (client *Client) SubmitBlob(payLoad []byte) (*BlobSubmitResponse, error) {
-	namespace := client.Namespace
-	fee := client.Fee
-	gasLimit := client.GasLimit
+// We suppose that blob is submitted successful once transaction is returned.
+func (c *Client) SubmitBlob(payLoad []byte) (*BlobSubmitResponse, error) {
+	namespace := c.Namespace
+	fee := c.Fee
+	gasLimit := c.GasLimit
 	// Resize to fixed length
 	payLoad = append(payLoad, make([]byte, DataBytesLen-len(payLoad))...)
 	submittedBlob, err := blob.NewBlobV0(namespace, payLoad)
@@ -108,7 +114,7 @@ func (client *Client) SubmitBlob(payLoad []byte) (*BlobSubmitResponse, error) {
 		return nil, err
 	}
 	commitment := submittedBlob.Commitment
-	txRes, err := client.Internal.State.SubmitPayForBlob(context.Background(), fee, gasLimit, []*blob.Blob{submittedBlob})
+	txRes, err := c.Internal.State.SubmitPayForBlob(context.Background(), fee, gasLimit, []*blob.Blob{submittedBlob})
 	if err != nil {
 		return nil, err
 	}
@@ -131,11 +137,11 @@ func (client *Client) SubmitBlob(payLoad []byte) (*BlobSubmitResponse, error) {
 	return &res, nil
 }
 
-func (client *Client) GetProof(
+func (c *Client) GetProof(
 	height uint64,
 	commitment blob.Commitment) (*blob.Proof, error) {
-	namespace := client.Namespace
-	return client.Internal.Blob.GetProof(context.Background(), height, namespace, commitment)
+	namespace := c.Namespace
+	return c.Internal.Blob.GetProof(context.Background(), height, namespace, commitment)
 }
 
 type DAProof struct {
@@ -144,12 +150,12 @@ type DAProof struct {
 	Proof        blob.Proof
 }
 
-func (client *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan *DAProof, error) {
+func (c *Client) Subscribe(ctx context.Context, batches <-chan *zklinknova.Batch) (chan *DAProof, error) {
 	return nil, nil
 }
 
-func (client *Client) Submit() ([]uint64, error) {
-	records, err := client.DbClient.GetRecordUncommittedToCelestia()
+func (c *Client) Submit() ([]uint64, error) {
+	records, err := c.Db.GetRecordUncommittedToCelestia()
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +166,7 @@ func (client *Client) Submit() ([]uint64, error) {
 		log.Info().
 			Uint64("batch_number", record.BatchNumber).
 			Msg("find uncommitted data in DB")
-		res, err := client.SubmitBlob(record.Data)
+		res, err := c.SubmitBlob(record.Data)
 		if err != nil {
 			// TODO: re-transmit mechanism
 			return nil, err
@@ -172,7 +178,7 @@ func (client *Client) Submit() ([]uint64, error) {
 			return nil, err
 		}
 
-		err = client.DbClient.Update(&record)
+		err = c.Db.UpdateRecord(&record)
 		if err != nil {
 			return nil, err
 		}
@@ -186,13 +192,13 @@ func (client *Client) Submit() ([]uint64, error) {
 	return submitted, nil
 }
 
-func (client *Client) Run(ctx context.Context, interval time.Duration) {
+func (c *Client) Run(ctx context.Context, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		for {
 			select {
 			case <-ticker.C:
-				_, err := client.Submit()
+				_, err := c.Submit()
 				if err != nil {
 					log.Debug().
 						Err(err).
