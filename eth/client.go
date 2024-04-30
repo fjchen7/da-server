@@ -4,7 +4,6 @@ import (
 	"context"
 	"da-server/db"
 	"da-server/eth/contract"
-	"fmt"
 	"github.com/ethereum/go-ethereum"
 	ethbind "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcmn "github.com/ethereum/go-ethereum/common"
@@ -86,16 +85,6 @@ func (c *Client) FetchBlobStreamXLatestNumber() (uint64, error) {
 		})
 }
 
-func (c *Client) GetLastUsedNonce(ctx context.Context) (uint64, error) {
-	_blockNumber, err := c.Ethereum.BlockNumber(ctx)
-	if err != nil {
-		return 0, nil
-	}
-	blockNumber := big.NewInt(0)
-	blockNumber.SetUint64(_blockNumber)
-	return c.Ethereum.NonceAt(ctx, c.ZkLinkContract.Address, blockNumber)
-}
-
 func (c *Client) Submit(ctx context.Context, celestiaLatestHeight uint64) ([]uint64, error) {
 	records, err := c.Db.GetRecordUnsubmittedToEth(celestiaLatestHeight)
 	if err != nil {
@@ -104,7 +93,8 @@ func (c *Client) Submit(ctx context.Context, celestiaLatestHeight uint64) ([]uin
 	log.Info().
 		Msgf("%d ETH uncommitted data found in DB", len(records))
 	var submitted []uint64
-	nonce, err := c.GetLastUsedNonce(ctx)
+	// Get latest nonce on chain
+	nonce, err := c.Ethereum.NonceAt(ctx, c.ZkLinkContract.Address, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -124,30 +114,14 @@ func (c *Client) Submit(ctx context.Context, celestiaLatestHeight uint64) ([]uin
 	for _, record := range records {
 		nonce++
 		txOpts.Nonce.SetUint64(nonce)
-		tx, err := c.VerifyProofAndRecordWithGasEstimate(record.CelestiaCommittedTxHash, txOpts)
+		_, err := c.VerifyProofAndRecordWithGasEstimate(record.BatchNumber, record.CelestiaCommittedTxHash, txOpts)
 		if err != nil {
 			log.Debug().
 				Uint64("batch_number", record.BatchNumber).
 				Hex("celestia_tx_hash", record.CelestiaCommittedTxHash).
 				Err(err).
-				Msg("error verify and record data in Ethereum")
-			continue
-		}
-		dbTx := &db.EthTransaction{
-			BatchNumber: record.BatchNumber,
-			Hash:        tx.Hash(),
-			Nonce:       tx.Nonce(),
-			SentTime:    tx.Time(),
-		}
-		err = c.Db.InsertTransaction(dbTx)
-		if err != nil {
-			log.Debug().
-				Uint64("batch_number", record.BatchNumber).
-				Hex("celestia_tx_hash", record.CelestiaCommittedTxHash).
-				Hex("eth_tx_hash", dbTx.Hash[:]).
-				Err(err).
-				Msg("error verify and record data in Ethereum")
-			return submitted, err
+				Msg("error verifying and recording data in Ethereum")
+			return nil, err
 		}
 		submitted = append(submitted, record.BatchNumber)
 	}
@@ -237,14 +211,14 @@ func (c *Client) checkAndUpdateUnconfirmedBatchNumberStatus(ctx context.Context,
 		}
 		if receipt.Status == ethtypes.ReceiptStatusSuccessful {
 			tx.ConfirmStatus = db.ConfirmStatusConfirmed
+			err = c.Db.UpdateTransactionStatus(tx.Hash, tx.ConfirmStatus)
+			if err != nil {
+				return err
+			}
+			break
 		} else if receipt.Status == ethtypes.ReceiptStatusFailed {
-			tx.ConfirmStatus = db.ConfirmStatusFailed
-		} else {
-			return fmt.Errorf("unknow Ethereum tx status: %d", receipt.Status)
-		}
-		err = c.Db.UpdateTransactionStatus(tx.Hash, tx.ConfirmStatus)
-		if err != nil {
-			return err
+			panic("Eth transaction status is failed.")
+			//tx.ConfirmStatus = db.ConfirmStatusFailed
 		}
 	}
 	return nil

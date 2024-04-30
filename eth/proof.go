@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"da-server/db"
 	"da-server/eth/contract"
 	"fmt"
 	"github.com/celestiaorg/celestia-app/pkg/square"
@@ -23,19 +24,27 @@ const (
 	blobIndex = 0
 )
 
-func (c *Client) VerifyProofAndRecordWithGasEstimate(celestiaTxHash []byte, transactOpts *ethbind.TransactOpts) (*ethtypes.Transaction, error) {
+func (c *Client) VerifyProofAndRecordWithGasEstimate(batchNumber uint64, celestiaTxHash []byte, transactOpts *ethbind.TransactOpts) (*ethtypes.Transaction, error) {
 	transactOpts.NoSend = true
 	tx, err := c.VerifyProofAndRecord(celestiaTxHash, transactOpts)
+	if err != nil {
+		return nil, err
+	}
+	gasPrice, err := c.Ethereum.SuggestGasPrice(transactOpts.Context)
+	if err != nil {
+		return nil, err
+	}
+	gasTipCap, err := c.Ethereum.SuggestGasTipCap(transactOpts.Context)
 	if err != nil {
 		return nil, err
 	}
 	callMsg := ethereum.CallMsg{
 		From:       transactOpts.From,
 		To:         &c.ZkLinkContract.Address,
-		Gas:        transactOpts.GasLimit,
-		GasPrice:   transactOpts.GasPrice,
+		Gas:        0,
+		GasPrice:   gasPrice,
 		GasFeeCap:  transactOpts.GasFeeCap,
-		GasTipCap:  transactOpts.GasTipCap,
+		GasTipCap:  gasTipCap,
 		Value:      transactOpts.Value,
 		Data:       tx.Data(),
 		AccessList: nil,
@@ -44,6 +53,23 @@ func (c *Client) VerifyProofAndRecordWithGasEstimate(celestiaTxHash []byte, tran
 	if err != nil {
 		return nil, err
 	}
+	dbTx := &db.EthTransaction{
+		BatchNumber: batchNumber,
+		Hash:        tx.Hash(),
+		Nonce:       tx.Nonce(),
+		SentTime:    tx.Time(),
+	}
+	err = c.Db.InsertTransaction(dbTx)
+	if err != nil {
+		log.Debug().
+			Uint64("batch_number", batchNumber).
+			Hex("celestia_tx_hash", celestiaTxHash).
+			Hex("eth_tx_hash", dbTx.Hash[:]).
+			Err(err).
+			Msg("error verify and record data in Ethereum")
+		return nil, err
+	}
+
 	transactOpts.GasLimit = gas
 	transactOpts.NoSend = false
 	return c.VerifyProofAndRecord(celestiaTxHash, transactOpts)
